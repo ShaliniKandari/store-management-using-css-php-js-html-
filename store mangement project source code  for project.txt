@@ -1,0 +1,260 @@
+
+Creating a full-featured store management system involves several components, including a database schema, PHP scripts for server-side logic, and HTML/CSS for the front-end. Below, I'll provide a basic example of a store management system, covering key aspects:
+
+Database Schema: This includes tables for products, categories, and orders.
+PHP Scripts: For CRUD operations (Create, Read, Update, Delete).
+HTML/CSS: Basic pages to interact with the system.
+1. Database Schema
+Create a MySQL database and tables:
+
+sql
+
+CREATE DATABASE store_management;
+
+USE store_management;
+
+CREATE TABLE categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    category_id INT,
+    FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+
+CREATE TABLE orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT,
+    quantity INT NOT NULL,
+    order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+2. PHP Scripts
+Database connection (db.php):
+
+php
+
+<?php
+$host = 'localhost';
+$db = 'store_management';
+$user = 'root';
+$pass = '';
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    echo 'Connection failed: ' . $e->getMessage();
+}
+?>
+Product Management (product.php):
+
+php
+
+<?php
+include 'db.php';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['add'])) {
+        $name = $_POST['name'];
+        $price = $_POST['price'];
+        $category_id = $_POST['category_id'];
+
+        $sql = "INSERT INTO products (name, price, category_id) VALUES (:name, :price, :category_id)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['name' => $name, 'price' => $price, 'category_id' => $category_id]);
+    } elseif (isset($_POST['update'])) {
+        $id = $_POST['id'];
+        $name = $_POST['name'];
+        $price = $_POST['price'];
+        $category_id = $_POST['category_id'];
+
+        $sql = "UPDATE products SET name = :name, price = :price, category_id = :category_id WHERE id = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['id' => $id, 'name' => $name, 'price' => $price, 'category_id' => $category_id]);
+    } elseif (isset($_POST['delete'])) {
+        $id = $_POST['id'];
+
+        $sql = "DELETE FROM products WHERE id = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['id' => $id]);
+    }
+}
+
+$products = $pdo->query("SELECT * FROM products")->fetchAll(PDO::FETCH_ASSOC);
+$categories = $pdo->query("SELECT * FROM categories")->fetchAll(PDO::FETCH_ASSOC);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Product Management</h1>
+
+    <h2>Add Product</h2>
+    <form method="POST">
+        <input type="text" name="name" placeholder="Product Name" required>
+        <input type="number" step="0.01" name="price" placeholder="Price" required>
+        <select name="category_id" required>
+            <option value="">Select Category</option>
+            <?php foreach ($categories as $category): ?>
+                <option value="<?= $category['id'] ?>"><?= $category['name'] ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" name="add">Add Product</button>
+    </form>
+
+    <h2>Product List</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Category</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($products as $product): ?>
+                <tr>
+                    <td><?= $product['id'] ?></td>
+                    <td><?= $product['name'] ?></td>
+                    <td><?= $product['price'] ?></td>
+                    <td><?= $categories[array_search($product['category_id'], array_column($categories, 'id'))]['name'] ?></td>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="id" value="<?= $product['id'] ?>">
+                            <button type="submit" name="delete">Delete</button>
+                        </form>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="id" value="<?= $product['id'] ?>">
+                            <input type="text" name="name" value="<?= $product['name'] ?>" required>
+                            <input type="number" step="0.01" name="price" value="<?= $product['price'] ?>" required>
+                            <select name="category_id" required>
+                                <?php foreach ($categories as $category): ?>
+                                    <option value="<?= $category['id'] ?>" <?= $product['category_id'] == $category['id'] ? 'selected' : '' ?>>
+                                        <?= $category['name'] ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" name="update">Update</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</body>
+</html>
+Order Management (order.php):
+
+php
+
+<?php
+include 'db.php';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $product_id = $_POST['product_id'];
+    $quantity = $_POST['quantity'];
+
+    $sql = "INSERT INTO orders (product_id, quantity) VALUES (:product_id, :quantity)";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(['product_id' => $product_id, 'quantity' => $quantity]);
+}
+
+$orders = $pdo->query("SELECT * FROM orders")->fetchAll(PDO::FETCH_ASSOC);
+$products = $pdo->query("SELECT * FROM products")->fetchAll(PDO::FETCH_ASSOC);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Order Management</h1>
+
+    <h2>Create Order</h2>
+    <form method="POST">
+        <select name="product_id" required>
+            <option value="">Select Product</option>
+            <?php foreach ($products as $product): ?>
+                <option value="<?= $product['id'] ?>"><?= $product['name'] ?></option>
+            <?php endforeach; ?>
+        </select>
+        <input type="number" name="quantity" placeholder="Quantity" required>
+        <button type="submit">Create Order</button>
+    </form>
+
+    <h2>Order List</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Order Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($orders as $order): ?>
+                <tr>
+                    <td><?= $order['id'] ?></td>
+                    <td><?= $products[array_search($order['product_id'], array_column($products, 'id'))]['name'] ?></td>
+                    <td><?= $order['quantity'] ?></td>
+                    <td><?= $order['order_date'] ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</body>
+</html>
+3. HTML/CSS (styles.css)
+css
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+h1 {
+    color: #333;
+}
+
+form {
+    margin-bottom: 20px;
+}
+
+input, select {
+    margin-right: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table, th, td {
+    border: 1px solid #ddd;
+}
+
+th, td {
+    padding: 8px;
+    text-align: left;
+}
+
+th {
+    background-color: #f4f4f4;
+}
+
